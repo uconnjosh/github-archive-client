@@ -48,12 +48,32 @@ class GitArchive
   def get_data
     url = @urls[0]
     download = open(url)
-    temp = File.new('temp.json', 'w')
-    copy_to_temp(download, temp)
+    @temp = File.new('temp.json', 'w')
+    copy_to_temp(download, @temp)
     # @urls.each do |url|
     #   download = open(url)
     #   temp = File.new('temp.json', 'w')
     # end
+  end
+
+  def import_json
+    @conn.exec(
+      <<-IMPORTSQL
+        create temporary table temp_json (values text) on commit drop;
+        copy temp_json from '/Users/joshpaul/Desktop/github-archive/temp4.json';
+
+        insert into events ("type", "repo")
+
+        select values->>'type' as type,
+               values->>'repo' as repo
+
+
+        from (
+          select json_array_elements(replace(values,'\','\\')::json) as values
+          from temp_json
+        ) a;
+    IMPORTSQL
+    )
   end
 
   def copy_to_temp(download, temp)
