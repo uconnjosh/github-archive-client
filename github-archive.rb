@@ -111,6 +111,21 @@ class GitArchive
         conn
       end
   end
+
+  def query_for_type(type="PushEvent")
+    # then sort by ids to get count!
+    @conn.exec("SELECT ALL from events WHERE type=#{type}")
+  end
+
+  def distinct_repos
+    @repos ||=
+      @conn.exec("SELECT DISTINCT repo FROM events;").to_a
+  end
+
+  def event_count_by_repo(repo, type="PushEvent")
+    @conn.exec("SELECT COUNT(DISTINCT id) FROM events where type='#{type}' AND repo='#{repo}';")
+  end
+
 end
 
 GitArchive.new(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
