@@ -18,15 +18,16 @@ require 'pg'
 
 class GitArchive
   def initialize(after_date, before_date, event_type, count)
-    after_date = DateTime.new(2016, 8, 26, 23)
+    after_date = DateTime.new(2016, 9, 17, 23)
     before_date = after_date + Rational(1, 24)
     db_connect
-    @urls = []
-    @file_contents = []
-    # init_temp_file
-    create_urls(after_date, before_date)
-    get_data
-    # gz = open('http://data.githubarchive.org/2015-01-01-12.json.gz')
+
+    binding.pry
+    # @urls = []
+    # @file_contents = []
+    # create_urls(after_date, before_date)
+    # get_data
+    # import_json
   end
 
   def date_url(date_time_string)
@@ -49,7 +50,13 @@ class GitArchive
     url = @urls[0]
     download = open(url)
     @temp = File.new('temp.json', 'w')
+    puts "copy to temp"
     copy_to_temp(download, @temp)
+    puts "convert to json array"
+    convert_to_json_array
+    puts "importing json!"
+    import_json
+    puts "done!"
     # @urls.each do |url|
     #   download = open(url)
     #   temp = File.new('temp.json', 'w')
@@ -60,16 +67,17 @@ class GitArchive
     @conn.exec(
       <<-IMPORTSQL
         create temporary table temp_json (values text) on commit drop;
-        copy temp_json from '/Users/joshpaul/Desktop/github-archive/temp4.json';
+        copy temp_json from '/Users/joshpaul/Desktop/github-archive/final_array.json';
 
-        insert into events ("type", "repo")
+        insert into events ("id", "type", "repo")
 
-        select values->>'type' as type,
+        select values->>'id' as id,
+               values->>'type' as type,
                values->>'repo' as repo
 
 
         from (
-          select json_array_elements(replace(values,'\','\\')::json) as values
+          select json_array_elements(replace(values::json) as values
           from temp_json
         ) a;
     IMPORTSQL
@@ -84,6 +92,41 @@ class GitArchive
     end
   end
 
+  def convert_to_json_array
+    # escaped_quotes_regex = "s/\\"/'\''/g"
+    system "tr '\n' ', ' < temp.json > temp_as_array.json"
+    system "sed -i '.json' s/.$// temp_as_array.json"
+    system "echo '[' | cat - temp_as_array.json > tempfoo && mv tempfoo temp_as_array.json"
+    system "echo ']' >> temp_as_array.json"
+    system "sed -i '.json' 's/\\r//g' temp_as_array.json"
+    system "sed -i '.json' 's/\\n//g' temp_as_array.json"
+    # system "sed -i '.json'  's/\\"/'\''/g' temp_as_array.json"
+
+    system "tr -d '\n' < temp_as_array.json > final_array.json"
+    # system "tr '\"' '\'\' < temp.json > temp_as_array.json"
+    # system "sed -i '.json' 's/\r//g' temp_as_array.json"
+    # system "sed -i '.json' 's/\n//g' temp_as_array.json"
+    # system "sed -i '.json' 's/\r\n//g' temp_as_array.json"
+    # puts "step 5 complete"
+
+    # system "tr '\r' '' < temp_as_array.json > final_array.json"
+    # system "tr '\n' '' < final_array.json > final_array2.json"
+    puts "json array finalized"
+
+    # tr '\r\n' ' '
+    # system "cat temp_as_array.json | tr '\r' ' ' |  tr '\n' ' ' | sed 's/ \{3,\}/ /g' | sed 's/   / /g' > onelinejson.json"
+    # system "tr '\r' ' ' < temp_as_array.json > final_array.json"
+    # system "tr '\n' ' ' < final_array.json > final_array2.json"
+    # system "tr '\n\r' ' ' < final_array2.json > final_array3.json"
+    # system "tr '\r\n\r\n' ' ' < final_array3.json > final_array4.json"
+
+    # system "cat temp_as_array.json | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed -e '$s/,$/]/'  > final_temp.json"
+    # puts "done converting to json array"
+    # exec "echo -e '[\n$(cat temp6.json)' > foobar.json"
+    # exec "echo -e 'task goes here\n$(cat todo.txt)' > todo.txt"
+
+  end
+
   def db_connect
     @conn ||=
       begin
@@ -94,7 +137,7 @@ class GitArchive
         pg = PG.connect(dbname: 'postgres')
         pg.exec('CREATE DATABASE gitarchive')
         conn = PG.connect(dbname: 'gitarchive')
-        conn.exect('CREATE TABLE events (id integer, data json )')
+        conn.exect('CREATE TABLE events (id text, data json )')
         conn
       end
   end
