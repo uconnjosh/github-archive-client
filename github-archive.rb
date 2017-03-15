@@ -77,7 +77,7 @@ class GitArchive
 
 
         from (
-          select json_array_elements(replace(values::json) as values
+          select json_array_elements(values::json) as values
           from temp_json
         ) a;
     IMPORTSQL
@@ -93,51 +93,21 @@ class GitArchive
   end
 
   def convert_to_json_array
-    # escaped_quotes_regex = "s/\\"/'\''/g"
-    system "tr '\n' ', ' < temp.json > temp_as_array.json"
-    system "sed -i '.json' s/.$// temp_as_array.json"
-    system "echo '[' | cat - temp_as_array.json > tempfoo && mv tempfoo temp_as_array.json"
-    system "echo ']' >> temp_as_array.json"
-    system "sed -i '.json' 's/\\r//g' temp_as_array.json"
-    system "sed -i '.json' 's/\\n//g' temp_as_array.json"
-    # system "sed -i '.json'  's/\\"/'\''/g' temp_as_array.json"
-
+    system "cat temp.json| jq --slurp '[.[] | {id: .id, type: .type, repo: .repo.name }]' > temp_as_array.json"
     system "tr -d '\n' < temp_as_array.json > final_array.json"
-    # system "tr '\"' '\'\' < temp.json > temp_as_array.json"
-    # system "sed -i '.json' 's/\r//g' temp_as_array.json"
-    # system "sed -i '.json' 's/\n//g' temp_as_array.json"
-    # system "sed -i '.json' 's/\r\n//g' temp_as_array.json"
-    # puts "step 5 complete"
-
-    # system "tr '\r' '' < temp_as_array.json > final_array.json"
-    # system "tr '\n' '' < final_array.json > final_array2.json"
-    puts "json array finalized"
-
-    # tr '\r\n' ' '
-    # system "cat temp_as_array.json | tr '\r' ' ' |  tr '\n' ' ' | sed 's/ \{3,\}/ /g' | sed 's/   / /g' > onelinejson.json"
-    # system "tr '\r' ' ' < temp_as_array.json > final_array.json"
-    # system "tr '\n' ' ' < final_array.json > final_array2.json"
-    # system "tr '\n\r' ' ' < final_array2.json > final_array3.json"
-    # system "tr '\r\n\r\n' ' ' < final_array3.json > final_array4.json"
-
-    # system "cat temp_as_array.json | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed -e '$s/,$/]/'  > final_temp.json"
-    # puts "done converting to json array"
-    # exec "echo -e '[\n$(cat temp6.json)' > foobar.json"
-    # exec "echo -e 'task goes here\n$(cat todo.txt)' > todo.txt"
-
   end
 
   def db_connect
     @conn ||=
       begin
-        conn = PG.connect(dbname: 'gitarchive')
-        conn.exec('CREATE TABLE IF NOT EXISTS events (id integer, data json )')
+        conn = PG.connect(dbname: 'gitarchivetwo')
+        conn.exec('CREATE TABLE IF NOT EXISTS events (id text, type text, repo text)')
         conn
       rescue
         pg = PG.connect(dbname: 'postgres')
-        pg.exec('CREATE DATABASE gitarchive')
-        conn = PG.connect(dbname: 'gitarchive')
-        conn.exect('CREATE TABLE events (id text, data json )')
+        pg.exec('CREATE DATABASE gitarchivetwo')
+        conn = PG.connect(dbname: 'gitarchivetwo')
+        conn.exect('CREATE TABLE events (id text, type text, repo text)')
         conn
       end
   end
